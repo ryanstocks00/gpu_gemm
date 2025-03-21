@@ -92,7 +92,7 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   CUTE_STATIC_ASSERT_V(congruent(select<0,2>(shape_MNK), dA));         // dA strides for shape MK
   CUTE_STATIC_ASSERT_V(congruent(select<1,2>(shape_MNK), dB));         // dB strides for shape NK
   CUTE_STATIC_ASSERT_V(congruent(select<0,1>(shape_MNK), dC));         // dC strides for shape MN
-
+//
   //
   // Full and Tiled Tensors
   //
@@ -346,8 +346,10 @@ gemm_nt(int m, int n, int k,
                                     Layout<Shape<_32,_8>>{}, // Thr layout 32x8 n-major
                                     Layout<Shape< _4,_1>>{});// Val layout  4x1 n-major
 
-  TiledMMA mmaC = make_tiled_mma(UniversalFMA<TC,TA,TB>{},
-                                 Layout<Shape<_16,_16,_1>>{});  // 16x16x1 TiledMMA
+  TiledMMA mmaC = make_tiled_mma(SM80_8x8x4_F64F64F64F64_TN{},
+                                 Layout<Shape<_2,_4,_1>>{});  // 16x16x1 TiledMMA
+  //TiledMMA mmaC = make_tiled_mma(UniversalFMA<TC,TA,TB>{},
+                                 //Layout<Shape<_16,_16,_1>>{});  // 16x16x1 TiledMMA
 
 #if 0
   print(copyA);
@@ -370,6 +372,42 @@ gemm_nt(int m, int n, int k,
        B, dB, sB, copyB,
        C, dC, sC, mmaC,
        alpha, beta);
+}
+
+// Setup params for a NT GEMM
+template <class T>
+void
+my_gemm_nt(int m, int n, int k,
+        T alpha,
+        T const* A, int ldA,
+        T const* B, int ldB,
+        T beta,
+        T      * C, int ldC,
+        cudaStream_t stream = 0)
+{
+  using namespace cute;
+
+  const int block_m = 128;
+  const int block_n = 128;
+  const int block_k = 8;
+
+  //TiledCopy copyA = make_tiled_copy(Copy_Atom<SM80_CP_ASYNC_CACHEALWAYS<uint128_t>, TA>{},
+                                    //Layout<Shape<_32,_8>>{}, // Thr layout 32x8 m-major
+                                    //Layout<Shape< _4,_1>>{});// Val layout  4x1 m-major
+  //TiledCopy copyB = make_tiled_copy(Copy_Atom<SM80_CP_ASYNC_CACHEALWAYS<uint128_t>, TB>{},
+                                    //Layout<Shape<_32,_8>>{}, // Thr layout 32x8 n-major
+                                    //Layout<Shape< _4,_1>>{});// Val layout  4x1 n-major
+//
+  //TiledMMA mmaC = make_tiled_mma(SM80
+  //dim3 dimBlock(size(mmaC));
+  //dim3 dimGrid(size(ceil_div(M, bM)),
+               //size(ceil_div(N, bN)));
+  //gemm_device<<<dimGrid, dimBlock, 0, stream>>>
+      //(prob_shape, cta_tiler,
+       //A, dA, sA, copyA,
+       //B, dB, sB, copyB,
+       //C, dC, sC, mmaC,
+       //alpha, beta);
 }
 
 // Setup params for a TN GEMM
@@ -468,6 +506,22 @@ gemm(char transA, char transB, int m, int n, int k,
   assert(false && "Not implemented");
 }
 
+template <typename T>
+void
+my_gemm(char transA, char transB, int m, int n, int k,
+     T alpha,
+     T const* A, int ldA,
+     T const* B, int ldB,
+     T beta,
+     T      * C, int ldC,
+     cudaStream_t stream = 0)
+{
+  if (transA == 'N' && transB == 'T') {
+    return my_gemm_nt(m, n, k, alpha, A, ldA, B, ldB, beta, C, ldC, stream);
+  }
+  assert(false && "Not implemented");
+}
+
 
 int main(int argc, char** argv)
 {
@@ -531,7 +585,7 @@ int main(int argc, char** argv)
 
   double gflops = (2.0*m*n*k) * 1e-9;
 
-  const int timing_iterations = 100;
+  const int timing_iterations = 10;
   //GPU_Clock timer;
 
   int ldA = 0, ldB = 0, ldC = m;
@@ -581,6 +635,22 @@ int main(int argc, char** argv)
   //double cute_time = 0 / timing_iterations;
   CUTE_CHECK_LAST();
   printf("CUTE_GEMM:     [%6.1f]GFlop/s  (%6.4f)ms\n", gflops / cute_time, cute_time*1000);
+
+  start = std::chrono::high_resolution_clock::now();
+
+  for (int i = 0; i < timing_iterations; ++i) {
+    my_gemm(transA, transB, m, n, k,
+         alpha,
+         d_A.data().get(), ldA,
+         d_B.data().get(), ldB,
+         beta,
+         d_C.data().get(), ldC);
+  }
+  cudaDeviceSynchronize();
+  double my_time = (std::chrono::high_resolution_clock::now() - start).count() / 1e9 / timing_iterations;
+  CUTE_CHECK_LAST();
+  printf("MY_GEMM:     [%6.1f]GFlop/s  (%6.4f)ms\n", gflops / my_time, my_time*1000);
+
 
   return 0;
 }
