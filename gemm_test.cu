@@ -490,7 +490,7 @@ int main(int argc, char** argv)
 
   int n = 5120;
   if (argc >= 3)
-    sscanf(argv[2], "%d", &m);
+    sscanf(argv[2], "%d", &n);
 
   int k = 4096;
   if (argc >= 4)
