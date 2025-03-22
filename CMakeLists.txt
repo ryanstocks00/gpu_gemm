@@ -4,7 +4,9 @@ project(GemmTest CUDA)
 
 enable_language(CXX CUDA)
 
-find_package(CUDA REQUIRED)
+find_package(CUDAToolkit REQUIRED)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -19,10 +21,17 @@ if(NOT cutlass_POPULATED)
 endif()
 
 
+message(STATUS "cutlass_SOURCE_DIR: ${cutlass_SOURCE_DIR}")
+add_compile_options(-I ${cutlass_SOURCE_DIR}/include)
 set(SOURCE_FILES gemm_test.cu)
 add_executable(gemm_test ${SOURCE_FILES})
-target_include_directories(gemm_test PUBLIC ${cutlass_SOURCE_DIR}/include)
+target_include_directories(gemm_test PRIVATE ${cutlass_SOURCE_DIR}/include)
 set_target_properties(gemm_test PROPERTIES CUDA_ARCHITECTURES native)
+
+add_executable(my_gemm_test my_gemm_test.cu)
+target_include_directories(my_gemm_test PRIVATE ${cutlass_SOURCE_DIR}/include)
+set_target_properties(my_gemm_test PROPERTIES CUDA_ARCHITECTURES native)
+target_link_libraries(my_gemm_test CUDA::curand CUDA::cublas)
 
 
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3")
