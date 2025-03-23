@@ -131,7 +131,7 @@ int main(int argc, char** argv)
   start = std::chrono::high_resolution_clock::now();
 
   for (int i = 0; i < timing_iterations; ++i) {
-    my_gemm(transA, transB, m, n, k,
+    naive_gemm(transA, transB, m, n, k,
          alpha,
          d_A.data().get(), ldA,
          d_B.data().get(), ldB,

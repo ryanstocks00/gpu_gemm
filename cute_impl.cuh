@@ -94,10 +94,10 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   Tensor gB = local_tile(mB, cta_tiler, cta_coord, Step< X,_1,_1>{});  // (BLK_N,BLK_K,k)
   Tensor gC = local_tile(mC, cta_tiler, cta_coord, Step<_1,_1, X>{});  // (BLK_M,BLK_N)
 
-  if (thread0()) {
-      print(gA);
-      printf("\n");
-  }
+  //if (thread0()) {
+      //print(gA);
+      //printf("\n");
+  //}
 
   // Shared memory buffers
   __shared__ TA smemA[cosize_v<ASmemLayout>];
@@ -366,7 +366,7 @@ gemm_nt(int m, int n, int k,
 }
 
 template <class T>
-__global__ void my_gemm_device(int m, int n, int k,
+__global__ void naive_gemm_device(int m, int n, int k,
         T alpha,
         T const* A, int ldA,
         T const* B, int ldB,
@@ -388,7 +388,7 @@ __global__ void my_gemm_device(int m, int n, int k,
 // Setup params for a NT GEMM
 template <class T>
 void
-my_gemm_nt(int m, int n, int k,
+naive_gemm_nt(int m, int n, int k,
         T alpha,
         T const* A, int ldA,
         T const* B, int ldB,
@@ -398,33 +398,15 @@ my_gemm_nt(int m, int n, int k,
 {
   using namespace cute;
 
-  const int block_m = 16;
-  const int block_n = 16;
-  const int block_k = 8;
-
-  //TiledCopy copyA = make_tiled_copy(Copy_Atom<SM80_CP_ASYNC_CACHEALWAYS<uint128_t>, TA>{},
-                                    //Layout<Shape<_32,_8>>{}, // Thr layout 32x8 m-major
-                                    //Layout<Shape< _4,_1>>{});// Val layout  4x1 m-major
-  //TiledCopy copyB = make_tiled_copy(Copy_Atom<SM80_CP_ASYNC_CACHEALWAYS<uint128_t>, TB>{},
-                                    //Layout<Shape<_32,_8>>{}, // Thr layout 32x8 n-major
-                                    //Layout<Shape< _4,_1>>{});// Val layout  4x1 n-major
-//
-  //TiledMMA mmaC = make_tiled_mma(SM80
-  //dim3 dimBlock(size(mmaC));
-  //dim3 dimGrid(size(ceil_div(M, bM)),
-               //size(ceil_div(N, bN)));
-  //gemm_device<<<dimGrid, dimBlock, 0, stream>>>
-      //(prob_shape, cta_tiler,
-       //A, dA, sA, copyA,
-       //B, dB, sB, copyB,
-       //C, dC, sC, mmaC,
-       //alpha, beta);
-
   dim3 dimBlock(16, 16, 1);
-  dim3 dimGrid(size(ceil_div(m, block_m)),
-               size(ceil_div(n, block_n)));
-  my_gemm_device<<<dimGrid, dimBlock, 0, stream>>>(m, n, k, alpha, A, ldA, B, ldB, beta, C, ldC);
+  dim3 dimGrid(size(ceil_div(m, 16)),
+               size(ceil_div(n, 16)));
+  naive_gemm_device<<<dimGrid, dimBlock, 0, stream>>>(m, n, k, alpha, A, ldA, B, ldB, beta, C, ldC);
 }
+
+
+
+
 
 // Setup params for a TN GEMM
 template <class TA, class TB, class TC,
@@ -524,7 +506,7 @@ gemm(char transA, char transB, int m, int n, int k,
 
 template <typename T>
 void
-my_gemm(char transA, char transB, int m, int n, int k,
+naive_gemm(char transA, char transB, int m, int n, int k,
      T alpha,
      T const* A, int ldA,
      T const* B, int ldB,
@@ -533,7 +515,7 @@ my_gemm(char transA, char transB, int m, int n, int k,
      cudaStream_t stream = 0)
 {
   if (transA == 'N' && transB == 'T') {
-    return my_gemm_nt(m, n, k, alpha, A, ldA, B, ldB, beta, C, ldC, stream);
+    return naive_gemm_nt(m, n, k, alpha, A, ldA, B, ldB, beta, C, ldC, stream);
   }
   assert(false && "Not implemented");
 }
