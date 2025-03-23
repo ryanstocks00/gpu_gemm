@@ -109,9 +109,11 @@ my_gemm_nt(int m, int n, int k,
   using thread_block_shape = Shape<_128, _128, _8>;
   //using thread_block_shape = Shape<_4, _2, _2>;
 
-  TiledMMA mma = make_tiled_mma(UniversalFMA<T>{},
-                                //Layout<Shape<_16, _16, _4>>{});
-                                Layout<Shape<_16, _16, _1>>{});
+  //TiledMMA mma = make_tiled_mma(UniversalFMA<T>{},
+                                ////Layout<Shape<_16, _16, _4>>{});
+                                //Layout<Shape<_16, _16, _1>>{});
+  TiledMMA mma = make_tiled_mma(SM80_8x8x4_F64F64F64F64_TN{},
+                                 Layout<Shape<_2,_4,_1>>{});  // 16x16x1 TiledMMA
 
   static_assert(size(mma) == 256);
   dim3 dimBlock(size(mma));
