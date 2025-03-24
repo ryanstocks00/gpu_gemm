@@ -30,8 +30,8 @@ __global__ void my_gemm_device(int m, int n, int k,
   Tensor shared_block_B = make_tensor(make_smem_ptr(shared_block_B_data), shared_block_B_shape);
 
   TiledCopy tiled_copy = make_tiled_copy(Copy_Atom<UniversalCopy<T>, T>{},
-                                    Layout<Shape<_32,_8>>{}, // Thr layout 32x8 m-major
-                                    Layout<Shape< _4,_1>>{});// Val layout  4x1 m-major
+                                    Layout<Shape<_1,_1>>{}, // Thr layout 32x8 m-major
+                                    Layout<Shape< _1,_1>>{});// Val layout  4x1 m-major
 
   ThrCopy thread_copy = tiled_copy.get_slice(threadIdx.x);
   Tensor thread_copy_subset_global_A = thread_copy.partition_S(thread_block_slice_A);
@@ -106,7 +106,7 @@ my_gemm_nt(int m, int n, int k,
 {
   using namespace cute;
    
-  using thread_block_shape = Shape<_128, _128, _8>;
+  using thread_block_shape = Shape<_32, _32, _32>;
   //using thread_block_shape = Shape<_4, _2, _2>;
 
   //TiledMMA mma = make_tiled_mma(UniversalFMA<T>{},
