@@ -1296,7 +1296,7 @@ public:
     result.status = gemm.run();
 
     if (result.status != cutlass::Status::kSuccess) {
-      std::cerr << "Failed to run CUTLASS Grouped GEMM kernel." << std::endl;
+      std::cerr << "Failed to run CUTLASS Grouped GEMM kernel." << cutlass::cutlassGetStatusString(result.status) << std::endl;
       return result;
     }
 
@@ -1478,14 +1478,14 @@ int main(int argc, char const **args) {
   // Define the Grouped and Batched GEMM types
   //
 
-  using ElementA = cutlass::tfloat32_t;
-  using ElementB = cutlass::tfloat32_t;
-  using ElementOutput = float;
-  using ElementAccumulator = float;
+  using ElementA = double;
+  using ElementB = double;
+  using ElementOutput = double;
+  using ElementAccumulator = double;
 
-  using LayoutA = cutlass::layout::ColumnMajor;
-  using LayoutB = cutlass::layout::ColumnMajor;
-  using LayoutC = cutlass::layout::ColumnMajor;
+  using LayoutA = cutlass::layout::RowMajor;
+  using LayoutB = cutlass::layout::RowMajor;
+  using LayoutC = cutlass::layout::RowMajor;
 
   // Gemm operator cutlass_tensorop_f16_s16816gemm_f16_128x128_32x4_nt_align8
   using GemmBatched = cutlass::gemm::device::GemmUniversal<
@@ -1495,46 +1495,32 @@ int main(int argc, char const **args) {
     ElementAccumulator,
     cutlass::arch::OpClassTensorOp,
     cutlass::arch::Sm80,
-    cutlass::gemm::GemmShape<128, 128, 32>,
-    cutlass::gemm::GemmShape<64, 64, 32>,
-    cutlass::gemm::GemmShape<16, 8, 16>,
-    cutlass::epilogue::thread::LinearCombination<
-      ElementOutput,
-      128 / cutlass::sizeof_bits<ElementOutput>::value,
-      ElementAccumulator,
-      ElementAccumulator
-    >,
-    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<8>,
-    4
+    cutlass::gemm::GemmShape<32, 32, 16>,
+    cutlass::gemm::GemmShape<16, 32, 16>
+    //cutlass::gemm::GemmShape<64, 64, 32>,
+    //cutlass::gemm::GemmShape<16, 8, 16>,
   >;
 
   // Define a grouped GEMM kernel with all template parameters set except
   // for scheduling mode. This will be used as the template for all scheduling
   // modes executed.
   using GemmKernel = typename cutlass::gemm::kernel::DefaultGemmGrouped<
-    ElementA,
-    LayoutA,
-    cutlass::ComplexTransform::kNone,
-    2,
-    ElementB,
-    LayoutB,
-    cutlass::ComplexTransform::kNone,
-    2,
-    ElementOutput, LayoutC,
-    ElementAccumulator,
-    cutlass::arch::OpClassTensorOp,
-    cutlass::arch::Sm80,
-    cutlass::gemm::GemmShape<128, 128, 16>,
-    cutlass::gemm::GemmShape<32, 32, 16>,
-    cutlass::gemm::GemmShape<16, 8, 4>,
-    cutlass::epilogue::thread::LinearCombination<
-        ElementOutput, 128 / cutlass::sizeof_bits<ElementOutput>::value,
-        ElementAccumulator, ElementAccumulator>,
-    // NOTE: Threadblock swizzling is currently not supported by CUTLASS's grouped kernels.
-    // This parameter is passed in at present to match the APIs of other kernels. The parameter
-    // is unused within the kernel.
-    cutlass::gemm::threadblock::GemmBatchedIdentityThreadblockSwizzle,
-    4>::GemmKernel;
+      GemmBatched::ElementA, GemmBatched::LayoutA, GemmBatched::kTransformA,
+      GemmBatched::kAlignmentA, GemmBatched::ElementB, GemmBatched::LayoutB,
+      GemmBatched::kTransformB, GemmBatched::kAlignmentB, GemmBatched::ElementC,
+      GemmBatched::LayoutC, GemmBatched::ElementAccumulator,
+      GemmBatched::OperatorClass, GemmBatched::ArchTag,
+      GemmBatched::ThreadblockShape, GemmBatched::WarpShape,
+      GemmBatched::InstructionShape,
+      // cutlass::gemm::GemmShape<32, 32, 16>, // Last one must be 16 due to
+      // L:511 default_mma_core_sm80.h cutlass::gemm::GemmShape<16, 16, 8>, //
+      // Last one must be 8 due to pipelining cutlass::gemm::GemmShape<8, 8, 4>,
+      GemmBatched::EpilogueOutputOp,
+      // NOTE: Threadblock swizzling is currently not supported by CUTLASS's
+      // grouped kernels. This parameter is passed in at present to match the
+      // APIs of other kernels. The parameter is unused within the kernel.
+      GemmBatched::ThreadblockSwizzle,
+      GemmBatched::kStages>::GemmKernel;
 
   using GemmGrouped = cutlass::gemm::device::GemmGrouped<GemmKernel>;
 
